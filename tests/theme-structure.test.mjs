@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFile as execFileCallback } from 'node:child_process';
-import { copyFile, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
@@ -9,8 +9,8 @@ import test from 'node:test';
 import { promisify } from 'node:util';
 import vm from 'node:vm';
 
-const themeDirectory = fileURLToPath(new URL('../velour-standard/', import.meta.url));
 const wordpressDirectory = fileURLToPath(new URL('../', import.meta.url));
+const themeDirectory = wordpressDirectory;
 const packageScript = path.join(wordpressDirectory, 'scripts/package-theme.mjs');
 const packageArchive = path.join(wordpressDirectory, 'dist/velour-standard.zip');
 const execFile = promisify(execFileCallback);
@@ -63,20 +63,30 @@ async function extractedHashes(directory) {
 async function createPackageFixture(prefix) {
   const directory = await mkdtemp(path.join(tmpdir(), prefix));
   const wordpress = path.join(directory, 'wordpress-theme');
-  const fixtureTheme = path.join(wordpress, 'velour-standard');
   const fixtureScript = path.join(wordpress, 'scripts/package-theme.mjs');
 
   await mkdir(path.dirname(fixtureScript), { recursive: true });
-  await cp(themeDirectory, fixtureTheme, { recursive: true });
+  for (const file of packagedThemeFiles) {
+    const destination = path.join(wordpress, file);
+    await mkdir(path.dirname(destination), { recursive: true });
+    await copyFile(path.join(themeDirectory, file), destination);
+  }
   await copyFile(packageScript, fixtureScript);
 
   return {
     archive: path.join(wordpress, 'dist/velour-standard.zip'),
     directory,
     script: fixtureScript,
-    theme: fixtureTheme,
+    theme: wordpress,
   };
 }
+
+test('the repository root is directly installable as a WordPress theme', async () => {
+  const stylesheet = await readFile(path.join(wordpressDirectory, 'style.css'), 'utf8');
+
+  assert.match(stylesheet, /^\s*Theme Name:\s*Velour Standard\s*$/m);
+  assert.ok((await stat(path.join(wordpressDirectory, 'index.php'))).isFile());
+});
 
 test('WordPress discovers the theme as Velour Standard', async () => {
   const stylesheet = await readThemeFile('style.css');
@@ -1300,26 +1310,6 @@ test('packaging fails closed on an unknown theme file without replacing the arch
     assert.equal(await sha256(packageArchive), archiveHash);
   } finally {
     await rm(unexpectedFile, { force: true });
-  }
-});
-
-test('packaging rejects a symlinked source root and preserves the previous archive', async () => {
-  const fixture = await createPackageFixture('velour-package-root-symlink-');
-  const outsideTheme = path.join(fixture.directory, 'outside-theme');
-
-  try {
-    await execFile(process.execPath, [fixture.script]);
-    const archiveHash = await sha256(fixture.archive);
-    await rename(fixture.theme, outsideTheme);
-    await symlink(outsideTheme, fixture.theme, 'dir');
-
-    await assert.rejects(
-      execFile(process.execPath, [fixture.script]),
-      /Theme source root must be a non-symlinked directory/,
-    );
-    assert.equal(await sha256(fixture.archive), archiveHash);
-  } finally {
-    await rm(fixture.directory, { force: true, recursive: true });
   }
 });
 

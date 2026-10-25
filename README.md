@@ -4,7 +4,7 @@ The custom WordPress and WooCommerce theme for The Velour Standard.
 
 ## Project structure
 
-- `velour-standard/` - installable WordPress theme source.
+- Repository root - directly installable WordPress theme source.
 - `tests/` - structural, security, interaction, and packaging tests.
 - `scripts/package-theme.mjs` - creates an emergency/manual installer ZIP.
 - `docs/` - migration, design, and implementation notes.
@@ -16,7 +16,7 @@ node scripts/package-theme.mjs
 node --test tests/theme-structure.test.mjs tests/presence-profile.test.mjs
 ```
 
-Generated ZIP files are deliberately not tracked. Git is the source of truth.
+The repository can be installed directly as a WordPress theme. Generated ZIP files are deliberately not tracked; Git is the source of truth.
 
 ## Branch workflow
 

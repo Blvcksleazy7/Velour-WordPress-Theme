@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import vm from 'node:vm';
 
-const themeDirectory = fileURLToPath(new URL('../velour-standard/', import.meta.url));
+const themeDirectory = fileURLToPath(new URL('../', import.meta.url));
 const scriptPath = path.join(themeDirectory, 'assets/js/velour-presence.js');
 
 async function loadPresenceModule({ fetch, document, setTimeoutFn = setTimeout } = {}) {

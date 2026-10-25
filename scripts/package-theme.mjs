@@ -21,9 +21,16 @@ import { promisify } from 'node:util';
 
 const execFile = promisify(execFileCallback);
 const wordpressDirectory = fileURLToPath(new URL('../', import.meta.url));
-const sourceDirectory = path.join(wordpressDirectory, 'velour-standard');
+const sourceDirectory = wordpressDirectory;
 const distributionDirectory = path.join(wordpressDirectory, 'dist');
 const finalArchive = path.join(distributionDirectory, 'velour-standard.zip');
+
+const themeDirectories = new Set([
+  'assets',
+  'inc',
+  'page-templates',
+  'template-parts',
+]);
 
 const allowedFiles = [
   '404.php',
@@ -170,6 +177,30 @@ async function collectFiles(directory, relativeDirectory = '') {
   return files.sort();
 }
 
+async function collectThemeFiles() {
+  const files = [];
+  const entries = await readdir(sourceDirectory, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const absolutePath = path.join(sourceDirectory, entry.name);
+    const entryStatus = await lstat(absolutePath);
+
+    if (themeDirectories.has(entry.name)) {
+      if (!entry.isDirectory() || !entryStatus.isDirectory() || entryStatus.isSymbolicLink()) {
+        throw new Error(`Unsupported theme path: ${entry.name}`);
+      }
+      files.push(...await collectFiles(absolutePath, entry.name));
+    } else if (entry.name.endsWith('.php') || entry.name.endsWith('.css')) {
+      if (!entry.isFile() || !entryStatus.isFile() || entryStatus.isSymbolicLink()) {
+        throw new Error(`Unsupported theme path: ${entry.name}`);
+      }
+      files.push(entry.name);
+    }
+  }
+
+  return files.sort();
+}
+
 function isContainedBy(root, target) {
   const relative = path.relative(root, target);
   return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
@@ -183,9 +214,9 @@ async function assertSourceRoot(expectedIdentity) {
 
   const canonicalWordpress = await realpath(wordpressDirectory);
   const canonicalSource = await realpath(sourceDirectory);
-  const expectedSource = path.join(canonicalWordpress, 'velour-standard');
+  const expectedSource = canonicalWordpress;
   if (canonicalSource !== expectedSource || !isContainedBy(canonicalWordpress, canonicalSource)) {
-    throw new Error('Theme source root must be the in-repository velour-standard directory');
+    throw new Error('Theme source root must be the repository root');
   }
 
   if (expectedIdentity && (sourceStatus.dev !== expectedIdentity.dev || sourceStatus.ino !== expectedIdentity.ino)) {
@@ -201,7 +232,7 @@ async function assertSourceRoot(expectedIdentity) {
 
 async function validateSource() {
   const sourceIdentity = await assertSourceRoot();
-  const actualFiles = await collectFiles(sourceDirectory);
+  const actualFiles = await collectThemeFiles();
   const allowed = new Set(allowedFiles);
 
   for (const file of actualFiles) {
